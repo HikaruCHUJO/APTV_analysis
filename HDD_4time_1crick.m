@@ -1,38 +1,28 @@
-% ========================================================================
-% 目的:
-%  - ROI中心(=マスク中心) と 粒子初期クリック を分離
-%  - i=1だけ粒子をクリックして初期化
-%  - 以降は Kalman(定速度CV) + normxcorr2(NCC) で自動追跡
-%  - missing 許容で最低5ステップ以上を落としにくくする
-%  - (cx,cy) が得られたら「生画像寄り」で 2Dガウスfitして (sigmaX,sigmaY)
-%
-% ========================================================================
-
 clear; close all; clc;
 
 %% ---------------- ユーザ設定 ----------------
-coord_map_csv     = 'E:\chujo\02_analysis\stock_data\12_22\compile\all_Euclidean_data\coordinate_map.csv';
-curves_master_csv = 'E:\chujo\02_analysis\stock_data\12_22\compile\all_Euclidean_data\L1_L2_curves_MASTER.csv';
-imageFolder       = 'E:\chujo\00_experiment\HDDex\02HDDflow\22degree\12‗25\189rpm\分析\3\999';
-save_name         = 'axay奥_12_22_autotrack';
+coord_map_csv     = '';
+curves_master_csv = '';
+imageFolder       = '';
+save_name         = '';
 
-monitor_full = false;      % true: フルセット / false: 赤のみ
-monitor_stride = 1;       % 例: 1=毎フレーム, 5=5フレーム毎に更新
+monitor_full = false;     
+monitor_stride = 1;       
 
 % ==== 静的マスク（ベアリング・気泡） ====
 use_static_mask    = true;
 n_static_masks     = 4;
-static_mask_mode   = 'manual';  % 'click_multi' | 'manual' | 'none'
-static_mask_centers = [800 530; 490 520; 1105 530; 640 930];
-static_mask_radii   = [160, 15, 17, 50];
+static_mask_mode   = 'manual';  
+static_mask_centers = [];
+static_mask_radii   = [];
 
 % ==== ROI楕円マスク（円盤領域の外を落とす） ====
-use_roi_mask = true;            % ROIを使うか
+use_roi_mask = true;            
 a_roi = 520;                    
 b_roi = 440;
 
 % ROI中心の決め方（=マスク中心）
-mask_mode = 'fixed';            % 'fixed' | 'once' | 'per_frame'
+mask_mode = 'fixed';            
 xc_fixed  = 780;
 yc_fixed  = 530;
 
@@ -51,7 +41,7 @@ refine_w  = 0.5;
 % ==== しきい値 ====
 use_threshold    = true;
 dist_threshold   = 30;
-threshold_metric = 'wrms';  % 'wrms' or 'min'
+threshold_metric = 'wrms';  
 
 % ==== 短命バースト除去====
 A_min        = 8;
@@ -60,16 +50,16 @@ eps_return   = 4;
 burst_medwin = 7;
 
 % ==== 極座標原点 ====
-polar_origin_mode = 'image_center'; % 'manual' | 'image_center' | 'click_once'
+polar_origin_mode = 'image_center';
 ox_manual = 645; oy_manual = 505;
 
-% fps（分かれば）
+% fps
 fps = 167;
 
 % ================================
-% 自動追跡（Kalman + NCC）
+% 自動追跡
 % ================================
-do_init_click_particle = true;  % 粒子初期化クリック
+do_init_click_particle = true; 
 
 
 tmpl_half   = 10;
@@ -93,9 +83,9 @@ kf_sigma_m = 1.5;
 % モニタ（任意）
 % ================================
 show_monitor = true;
-monitor_show_processed = true;   % true: ROI/前処理後, false: 生画像
+monitor_show_processed = true;  
 
-%% ---------------- 1) CSV 読み込み（キャッシュ） ----------------
+%% ---------------- 1) CSV 読み込み ----------------
 cache_mat = fullfile(fileparts(curves_master_csv), 'calib_cache_xy_curves.mat');
 [labels, curves, xy_map] = loadOrBuildCalibCache(coord_map_csv, curves_master_csv, cache_mat);
 
@@ -118,7 +108,7 @@ for i = 1:N
 end
 mean_img = Sacc / N;
 
-%% ---- 静的マスクを作成（1回だけ） ----
+%% ---- 静的マスクを作成 ----
 static_mask = false(size(mean_img));
 if use_static_mask
     [Hmean, Wmean] = size(mean_img);
@@ -163,7 +153,6 @@ switch lower(mask_mode)
         xc = xc_fixed; yc = yc_fixed;
 
     case 'once'
-        % 「ROI中心(=円盤中心)」を決めるためのクリック
         Iclick = mean_img;
         if use_static_mask, Iclick(static_mask)=0; end
         [xc, yc, stopNow] = pickPointRedWithFinish(Iclick);
@@ -173,7 +162,6 @@ switch lower(mask_mode)
         end
 
     case 'per_frame'
-        % 非推奨：毎フレームROI中心をクリック
         xc = NaN; yc = NaN;
 
     otherwise
@@ -182,14 +170,9 @@ end
 
 %% ---------------- 出力テーブル ----------------
 res = table('Size',[N 22], 'VariableTypes', ...
-    {'double','double','double','double','double','double','double','double','double','double', ...
-     'string','double','double','double','double','double','double','double','double','double', ...
-     'double','double'}, ...
+    {'double','double','double','double','double','double','double','double','double','double', 'string','double','double','double','double','double','double','double','double','double', 'double','double'}, ...
     'VariableNames', ...
-    {'frame','X','Y','sigmaX','sigmaY','FWHMX','FWHMY', ...
-     'sigmaMaj','sigmaMin','theta_deg_raw','labels_used','wrms_L','K_used', ...
-     'z_euclid_idw','z_euclid_raw','dist_metric','theta_used_deg','aspect_meas','L1','L2', ...
-     'rho_px','time_s'});
+    {'frame','X','Y','sigmaX','sigmaY','FWHMX','FWHMY', 'sigmaMaj','sigmaMin','theta_deg_raw','labels_used','wrms_L','K_used', 'z_euclid_idw','z_euclid_raw','dist_metric','theta_used_deg','aspect_meas','L1','L2', 'rho_px','time_s'});
 
 trkXY = nan(N,2);
 kF = 2*sqrt(2*log(2));
@@ -201,7 +184,7 @@ tmpl = [];
 kf = [];
 last_valid_xy = [NaN; NaN];
 
-%% ---------------- monitor ----------------
+%% ---------------- 観測----------------
 mon = [];
 if show_monitor
     mon = initMonitorFigure(mean_img, use_roi_mask, xc, yc, a_roi, b_roi, ...
@@ -214,21 +197,18 @@ if show_monitor
     mon.stride = max(1, round(monitor_stride));
 
     if ~monitor_full
-        % 赤(pt_meas) 以外は全部消す
         set(mon.pt_pred,'Visible','off');
         set(mon.pt_cand,'Visible','off');
         set(mon.pt_rej ,'Visible','off');
         set(mon.traj   ,'Visible','off');
         set(mon.rect_search,'Visible','off');
         set(mon.rect_fit   ,'Visible','off');
-        set(mon.roi,'Visible','off');     % ROI楕円も消す（要望通り）
-        % 静的マスク円は今はハンドル保持してないので「消したいなら」後述の改善へ
+        set(mon.roi,'Visible','off');     
         mon.draw_windows = false;
     else
         mon.draw_windows = true;
     end
 end
-
 %% ---------------- 3) main loop ----------------
 iProc = 0;
 
@@ -238,38 +218,26 @@ for i = 1:N
     Iraw = double(Iraw_u8);
     [H,W] = size(Iraw);
 
-    % per_frameならROI中心クリック（非推奨）
     if strcmpi(mask_mode,'per_frame')
         Iclick = Iraw;
         if use_static_mask, Iclick(static_mask)=0; end
         [xc,yc,stopNow] = pickPointRedWithFinish(Iclick);
         if stopNow, break; end
     end
-
-    % ============================================================
-    % 重要：NCC/fit に使う画像を2系統に分ける
-    %   - IclickP : 粒子初期クリック用（ROIをかけない）
-    %   - Iproc   : 追跡/fit用（静的マスク + 必要ならROI）
-    % ============================================================
     IclickP = Iraw;
     if use_static_mask, IclickP(static_mask)=0; end
 
     Iproc = Iraw;
     if use_static_mask, Iproc(static_mask)=0; end
 
-    % 軽い前処理
     Iproc = imgaussfilt(medfilt2(Iproc,[1,1]), 1);
 
-    % ROIマスク（必要なら）
     if use_roi_mask
         [Xg,Yg] = meshgrid(1:W, 1:H);
         roi_out = ((Xg-xc).^2/a_roi^2 + (Yg-yc).^2/b_roi^2) >= 1;
         Iproc(roi_out) = 0;
     end
 
-    % ============================================================
-    % (A) init: 粒子の初期クリック（ROIをかけない IclickP ）
-    % ============================================================
     if ~haveTrack
         if do_init_click_particle
             [x0,y0,stopNow] = pickPointRedWithFinish(IclickP);
@@ -295,9 +263,6 @@ for i = 1:N
         last_valid_xy = [cx0;cy0];
     end
 
-    % ============================================================
-    % (A2) predict + NCC
-    % ============================================================
     kf = kf_predict(kf);
     x_pred = kf.x(1);
     y_pred = kf.x(2);
@@ -305,7 +270,6 @@ for i = 1:N
     expand = 1 + search_expand_per_miss * missCount;
     sh = round(search_half * expand);
 
-    % テンプレがフラット化していたら再取得
     if isempty(tmpl) || std(tmpl(:)) < 1e-6
         tmplTry = getPatchFixed(Iproc, last_valid_xy(1), last_valid_xy(2), tmpl_half);
         if ~isempty(tmplTry) && std(double(tmplTry(:))) >= 1e-6
@@ -382,30 +346,20 @@ for i = 1:N
         end
     end
 
-    % ====== monitor更新======
     if show_monitor && isvalid(mon.fig)
     
-        % 解析に使っている Iproc を表示用に uint8 化
         imgShow = uint8(min(max(Iproc,0),255));
     
-        updateMonitor(mon, imgShow, i, missCount, ...
-            x_pred, y_pred, x_cand, y_cand, ...
-            cx, cy, peakCorr, isValid, sh, fit_half);
+        updateMonitor(mon, imgShow, i, missCount, x_pred, y_pred, x_cand, y_cand, cx, cy, peakCorr, isValid, sh, fit_half);
     
         drawnow limitrate;
     
-        % Finish監視
         if isappdata(mon.fig,'stopNow') && getappdata(mon.fig,'stopNow')
             fprintf('Finish pressed -> stop at frame %d\n', i);
             break;
         end
     end
 
-
-
-    % ============================================================
-    % (B) L1/L2 & z 推定
-    % ============================================================
     if isfinite(sX) && isfinite(sY)
         if useFWHM
             L1_meas = kF*sY; L2_meas = kF*sX;
@@ -496,10 +450,6 @@ for i = 1:N
          L1_meas,L2_meas,asp_meas,FWHMX,FWHMY,sigmaMaj,sigmaMin] = ...
          deal(NaN,NaN,NaN,0,string(""),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN);
     end
-
-    % ============================================================
-    % (C) save row
-    % ============================================================
     iProc = iProc + 1;
 
     res.frame(iProc)        = i;
@@ -538,7 +488,7 @@ if iProc==0
     return;
 end
 
-%% ================= 4) 短命バースト除去 =================
+%% ================= 4) スパイク形状外れ値除去 =================
 z0 = res.z_euclid_idw(:);
 z_clean = z0;
 flag_burst_rm = false(numel(z0),1);
@@ -599,10 +549,7 @@ traj_csv = fullfile(traj_dir, sprintf('traj_xyztheta_%s.csv', datestr(now,'yyyym
 
 Ttraj = table( ...
     res.frame, res.time_s, res.X, res.Y, res.rho_px, res.theta_used_deg, ...
-    res.z_euclid_raw, res.z_after_burst_clean, res.wrms_L, res.K_used, res.labels_used, ...
-    res.L1, res.L2, ...
-    'VariableNames', {'frame','time_s','x_px','y_px','rho_px','theta_deg', ...
-                      'z_raw_mm','z_clean_mm','wrms_L','K_used','labels_used','L1','L2'});
+    res.z_euclid_raw, res.z_after_burst_clean, res.wrms_L, res.K_used, res.labels_used, res.L1, res.L2, 'VariableNames', {'frame','time_s','x_px','y_px','rho_px','theta_deg', 'z_raw_mm','z_clean_mm','wrms_L','K_used','labels_used','L1','L2'});
 
 writetable(Ttraj, traj_csv);
 fprintf('[traj] Saved: %s (rows=%d)\n', traj_csv, height(Ttraj));
@@ -632,36 +579,30 @@ title('3D trajectory (color=z)');
 axis equal; view(45,25); colorbar;
 
 %% ========================================================================
-%  support functions
+%  関数う
 % ========================================================================
 
-function mon = initMonitorFigure(img, use_roi_mask, xc, yc, a_roi, b_roi, ...
-                                 use_static_mask, static_mask_centers, static_mask_radii)
+function mon = initMonitorFigure(img, use_roi_mask, xc, yc, a_roi, b_roi, use_static_mask, static_mask_centers, static_mask_radii)
 
-    mon.fig = figure('Color','w','Name','Auto tracking monitor',...
-        'NumberTitle','off','MenuBar','none','ToolBar','none');
+    mon.fig = figure('Color','w','Name','Auto tracking monitor', 'NumberTitle','off','MenuBar','none','ToolBar','none');
 
     mon.ax  = axes('Parent',mon.fig);
     mon.im  = imshow(uint8(min(max(img,0),255)), 'Parent', mon.ax);
     hold(mon.ax,'on');   
     axis(mon.ax,'image'); axis(mon.ax,'on');
 
-    % --- 履歴（採用点） ---
-    mon.traj = plot(mon.ax, NaN, NaN, 'r-', 'LineWidth', 1.2);  % 履歴線
+    mon.traj = plot(mon.ax, NaN, NaN, 'r-', 'LineWidth', 1.2);  
 
-    % --- 点群（状態の可視化） ---
-    mon.pt_meas = plot(mon.ax, NaN, NaN, 'ro', 'MarkerFaceColor','r', 'MarkerSize',3); % 確定 プロットの大きさここで確定
-    mon.pt_pred = plot(mon.ax, NaN, NaN, 'c+', 'LineWidth',1.6, 'MarkerSize',10);     % 予測
-    mon.pt_cand = plot(mon.ax, NaN, NaN, 'yo', 'LineWidth',1.2, 'MarkerSize',8);      % NCC候補
-    mon.pt_rej  = plot(mon.ax, NaN, NaN, 'mx', 'LineWidth',1.6, 'MarkerSize',9);      % 棄却候補（単発）
+    mon.pt_meas = plot(mon.ax, NaN, NaN, 'ro', 'MarkerFaceColor','r', 'MarkerSize',3);
+    mon.pt_pred = plot(mon.ax, NaN, NaN, 'c+', 'LineWidth',1.6, 'MarkerSize',10);     
+    mon.pt_cand = plot(mon.ax, NaN, NaN, 'yo', 'LineWidth',1.2, 'MarkerSize',8);      
+    mon.pt_rej  = plot(mon.ax, NaN, NaN, 'mx', 'LineWidth',1.6, 'MarkerSize',9);      
 
-    % --- 窓（rectangle） ---
     mon.rect_search = rectangle(mon.ax,'Position',[1 1 1 1], ...
         'EdgeColor','y','LineWidth',1.2,'LineStyle','-','Visible','off');
     mon.rect_fit = rectangle(mon.ax,'Position',[1 1 1 1], ...
         'EdgeColor','g','LineWidth',1.2,'LineStyle','-','Visible','off');
 
-    % --- ROI楕円境界 ---
     mon.roi = plot(mon.ax, NaN, NaN, 'w--', 'LineWidth', 1.2);
     if use_roi_mask && isfinite(xc) && isfinite(yc) && isfinite(a_roi) && isfinite(b_roi)
         tt = linspace(0,2*pi,360);
@@ -670,7 +611,6 @@ function mon = initMonitorFigure(img, use_roi_mask, xc, yc, a_roi, b_roi, ...
         set(mon.roi,'XData',xr,'YData',yr);
     end
 
-    % --- 静的マスク境界（円） ---
     if use_static_mask && ~isempty(static_mask_centers)
         for k = 1:size(static_mask_centers,1)
             cxm = static_mask_centers(k,1);
@@ -681,10 +621,8 @@ function mon = initMonitorFigure(img, use_roi_mask, xc, yc, a_roi, b_roi, ...
         end
     end
 
-    % --- テキスト ---
     mon.txt = text(mon.ax, 10, 20, '', 'Color','y','FontSize',12,'FontWeight','bold');
 
-    % stop
     title(mon.ax,'Finish: button or [F]','FontSize',12);
     setappdata(mon.fig,'stopNow',false);
     uicontrol('Style','pushbutton','String','Finish (F)',...
@@ -698,19 +636,14 @@ function mon = initMonitorFigure(img, use_roi_mask, xc, yc, a_roi, b_roi, ...
         end
     end
 
-    % 任意パラメータ
     mon.hist_max = 300;
     mon.draw_windows = true;
 end
 
 
-function updateMonitor(mon, img, frameIdx, missCount, ...
-                       x_pred, y_pred, x_cand, y_cand, ...
-                       cx, cy, corrPeak, isValid, sh, fit_half)
-    % 背景更新
+function updateMonitor(mon, img, frameIdx, missCount, x_pred, y_pred, x_cand, y_cand, cx, cy, corrPeak, isValid, sh, fit_half)
     mon.im.CData = img;
     
-    % --- 赤（採用点）は常に更新 ---
     if isfinite(cx) && isfinite(cy)
         mon.pt_meas.XData = cx;
         mon.pt_meas.YData = cy;
@@ -718,8 +651,7 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
         mon.pt_meas.XData = NaN;
         mon.pt_meas.YData = NaN;
     end
-    
-    % 軽量モードならここで終了（＝赤●だけ）
+
     if isfield(mon,'full') && ~mon.full
         mon.txt.String = sprintf('frame=%d  miss=%d', frameIdx, missCount);
         return;
@@ -727,12 +659,10 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
 
     if isempty(mon) || ~isvalid(mon.fig), return; end
 
-    % 画像更新が一番重い：フルモードの時だけ更新
     if isfield(mon,'full') && mon.full
         mon.im.CData = img;
     end
 
-    % --- 赤●（採用点）は常に更新 ---
     if isfinite(cx) && isfinite(cy)
         mon.pt_meas.XData = cx;
         mon.pt_meas.YData = cy;
@@ -741,14 +671,11 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
         mon.pt_meas.YData = NaN;
     end
 
-    % 軽量モードならここで終了（他は触らない）
     if isfield(mon,'full') && ~mon.full
-        % テキストだけは軽いので残すなら更新してもOK
         mon.txt.String = sprintf('frame=%d  miss=%d', frameIdx, missCount);
         return;
     end
 
-    % --- 予測位置 ---
     if isfinite(x_pred) && isfinite(y_pred)
         mon.pt_pred.XData = x_pred;
         mon.pt_pred.YData = y_pred;
@@ -756,7 +683,6 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
         mon.pt_pred.XData = NaN; mon.pt_pred.YData = NaN;
     end
 
-    % --- NCC候補 ---
     if isfinite(x_cand) && isfinite(y_cand)
         mon.pt_cand.XData = x_cand;
         mon.pt_cand.YData = y_cand;
@@ -764,16 +690,13 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
         mon.pt_cand.XData = NaN; mon.pt_cand.YData = NaN;
     end
 
-    % --- 確定点（ガウスfit採用） ---
     if isValid && isfinite(cx) && isfinite(cy)
         mon.pt_meas.XData = cx;
         mon.pt_meas.YData = cy;
 
-        % 履歴に追加（線）
         xd = mon.traj.XData; yd = mon.traj.YData;
         xd = [xd, cx]; yd = [yd, cy];
 
-        % 履歴の長さ制限
         if numel(xd) > mon.hist_max
             xd = xd(end-mon.hist_max+1:end);
             yd = yd(end-mon.hist_max+1:end);
@@ -781,14 +704,10 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
         mon.traj.XData = xd;
         mon.traj.YData = yd;
 
-        % 棄却マーカーは消す
         mon.pt_rej.XData = NaN; mon.pt_rej.YData = NaN;
 
     else
-        % 採用できないとき：確定点は消す
         mon.pt_meas.XData = NaN; mon.pt_meas.YData = NaN;
-
-        % NCC候補があるなら棄却点として×表示
         if isfinite(x_cand) && isfinite(y_cand)
             mon.pt_rej.XData = x_cand;
             mon.pt_rej.YData = y_cand;
@@ -796,8 +715,6 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
             mon.pt_rej.XData = NaN; mon.pt_rej.YData = NaN;
         end
     end
-
-    % --- 探索窓・fit窓 ---
     if mon.draw_windows
         if isfinite(x_pred) && isfinite(y_pred) && isfinite(sh)
             mon.rect_search.Position = [x_pred-sh, y_pred-sh, 2*sh, 2*sh];
@@ -814,7 +731,6 @@ function updateMonitor(mon, img, frameIdx, missCount, ...
         end
     end
 
-    % --- 表示テキスト ---
     if isfinite(corrPeak)
         mon.txt.String = sprintf('frame=%d  miss=%d  corr=%.3f  valid=%d', ...
             frameIdx, missCount, corrPeak, isValid);
@@ -888,8 +804,7 @@ function [p,fitimg,exitflag] = fit2DGauss_subpixel_axisaligned(img)
     lb=[0,1,1,0.5,0.5,-Inf];
     ub=[Inf,Nx,Ny,Nx,Ny,Inf];
 
-    opts=optimoptions('lsqcurvefit','Display','off','MaxIter',300,'MaxFunctionEvaluations',5000,...
-        'FunctionTolerance',1e-8,'StepTolerance',1e-8);
+    opts=optimoptions('lsqcurvefit','Display','off','MaxIter',300,'MaxFunctionEvaluations',5000, 'FunctionTolerance',1e-8,'StepTolerance',1e-8);
 
     xy=[X(:),Y(:)];
     [p,~,~,exitflag]=lsqcurvefit(g,p0,xy,z,lb,ub,opts);
@@ -907,16 +822,12 @@ end
 
 function [x,y,stopNow] = pickPointRedWithFinish(img)
     stopNow=false;
-    hFig=figure('Color','w','Name','クリックで選択 / Finishで終了',...
-        'NumberTitle','off','MenuBar','none','ToolBar','none');
+    hFig=figure('Color','w','Name','クリックで選択 / Finishで終了', 'NumberTitle','off','MenuBar','none','ToolBar','none');
     hAx=axes('Parent',hFig);
 
     imgd = double(img);
     
-    % マスクで 0 にされた画素を除外（白飛びの主因対策）
     valid = isfinite(imgd) & (imgd > 0);
-    
-    % もし有効画素が少なすぎたら保険で全体を使う
     if nnz(valid) < 100
         valid = isfinite(imgd);
     end
@@ -937,8 +848,7 @@ function [x,y,stopNow] = pickPointRedWithFinish(img)
     hHy=line(hAx,[NaN NaN],[1 H],'Color','r','LineWidth',1.5);
 
     uicontrol('Style','pushbutton','String','Finish (F)',...
-        'Units','normalized','Position',[0.76 0.93 0.22 0.06],...
-        'FontSize',11,'Callback',@(~,~)finishNow());
+        'Units','normalized','Position',[0.76 0.93 0.22 0.06], 'FontSize',11,'Callback',@(~,~)finishNow());
 
     set(hFig,'WindowButtonMotionFcn',@onMove);
     set(hFig,'WindowButtonDownFcn',@onClick);
